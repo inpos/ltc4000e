@@ -291,7 +291,7 @@ local function ts_on_receive_fields(pos,formname,fields,sender)
 end
 
 local nodebox = {
-	{ -0.35, -0.45, 0.25, 0.35, 0.45, 0.75 }
+	{ -0.35, -0.45, 0.35, 0.35, 0.45, 0.85 }
 }
 
 
