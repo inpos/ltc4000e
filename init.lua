@@ -150,7 +150,7 @@ end
 
 local function update_ts_formspec(pos,data)
 	local meta = minetest.get_meta(pos)
-	local fs = "size[10,8]"..
+	local fs = "size[12,8]"..
 		"background[0,0;0,0;ltc4000e_formspec_bg.png;true]"
 	for _,field in pairs(data) do
 		if field.type == "image" then
