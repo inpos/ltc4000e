@@ -361,3 +361,22 @@ minetest.register_lbm({
 		end
 	end
 })
+
+--Crafting recipe
+minetest.register_craft({
+	output = "ltc4000e:controller",
+	recipe = {
+		{"default:steelblock","streets:bigpole","default:steelblock"},
+		{"default:steelblock","mesecons_luacontroller:luacontroller0000","default:steelblock"},
+		{"default:steelblock","digistuff:touchscreen","default:steelblock"},
+	}
+})
+
+minetest.register_craft({
+	output = "ltc4000e:controller",
+	recipe = {
+		{"moreblocks:slab_steelblock_1","streets:bigpole","moreblocks:slab_steelblock_1"},
+		{"moreblocks:slab_steelblock_1","mesecons_luacontroller:luacontroller0000","moreblocks:slab_steelblock_1"},
+		{"moreblocks:slab_steelblock_1","digistuff:touchscreen","moreblocks:slab_steelblock_1"},
+	}
+})
