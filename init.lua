@@ -343,3 +343,21 @@ minetest.register_node("ltc4000e:controller", {
 		},
 	},
 })
+
+--Make sure lights don't "stall" if unloaded
+minetest.register_lbm({
+	label = "Restart LTC-4000E timers",
+	name = "ltc4000e:restart_timers",
+	nodenames = {"ltc4000e:controller"},
+	run_at_every_load = true,
+	action = function(pos)
+		local meta = minetest.get_meta(pos)
+		local mem = minetest.deserialize(meta:get_string("mem"))
+		if mem.cycle then
+			local event = {}
+			event.type = "interrupt"
+			event.iid = "tick"
+			run(pos,event)
+		end
+	end
+})
