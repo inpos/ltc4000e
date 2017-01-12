@@ -1,3 +1,24 @@
+local cabinet_digiline_rules = {
+	--Around the bottom
+	{x=1,y=0,z=0},
+	{x=-1,y=0,z=0},
+	{x=0,y=0,z=1},
+	{x=0,y=0,z=-1},
+
+	--Around the top
+	{x=1,y=1,z=0},
+	{x=-1,y=1,z=0},
+	{x=0,y=1,z=1},
+	{x=0,y=1,z=-1},
+
+	--Out the top/bottom
+	{x=0,y=2,z=0},
+	{x=0,y=-1,z=0},
+
+	--To a distributor 2m below
+	{x=0,y=-2,z=0},
+}
+
 --Just enough of the touchscreen to enable it to work here
 local function process_command(meta,data,msg)
 	if msg.command == "clear" then
@@ -208,6 +229,10 @@ end
 local fw = loadfile(minetest.get_modpath("ltc4000e")..DIR_DELIM.."fw.lua")
 
 local function run(pos,event)
+	--Determine controller type
+	local node = minetest.get_node(pos)
+	local is_cabinet = (node.name == "ltc4000e:nema_bottom")
+
 	--Initialize environment
 	local context = {}
 	local meta = minetest.get_meta(pos)
@@ -231,13 +256,25 @@ local function run(pos,event)
 		return(os.date("*t",os.time()))
 	end
 
-	function context.digiline_send(channel,msg)
-		if channel == "touchscreen" then
-			--Touchscreen is integrated into the chip
-			ts_on_digiline_receive(pos,msg)
-		else
-			--Not an integrated peripheral, so send the message
-			digiline:receptor_send(pos,digiline.rules.default,channel,msg)
+	if is_cabinet then
+		function context.digiline_send(channel,msg)
+			if channel == "touchscreen" then
+				--Touchscreen is integrated into the chip
+				ts_on_digiline_receive(pos,msg)
+			else
+				--Not an integrated peripheral, so send the message
+				digiline:receptor_send(pos,cabinet_digiline_rules,channel,msg)
+			end
+		end
+	else
+		function context.digiline_send(channel,msg)
+			if channel == "touchscreen" then
+				--Touchscreen is integrated into the chip
+				ts_on_digiline_receive(pos,msg)
+			else
+				--Not an integrated peripheral, so send the message
+				digiline:receptor_send(pos,digiline.rules.default,channel,msg)
+			end
 		end
 	end
 
@@ -290,26 +327,26 @@ local function ts_on_receive_fields(pos,formname,fields,sender)
 	run(pos,event)
 end
 
-local nodebox = {
+local polemount_nodebox = {
 	{ -0.35, -0.45, 0.35, 0.35, 0.45, 0.85 }
 }
 
 
-minetest.register_node("ltc4000e:controller", {
+minetest.register_node("ltc4000e:polemount", {
 	tiles = {
-		"ltc4000e_cabinet_sides.png",
-		"ltc4000e_cabinet_sides.png",
-		"ltc4000e_cabinet_sides.png",
-		"ltc4000e_cabinet_sides.png",
-		"ltc4000e_cabinet_sides.png",
-		"ltc4000e_cabinet_front.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_polemount_front.png",
 	},
-	description = "LTC-4000E Traffic Signal Controller",
+	description = "LTC-4000E Traffic Signal Controller (Pole-Mount)",
 	paramtype = "light",
 	paramtype2 = "facedir",
 	drawtype = "nodebox",
 	groups = {dig_immediate=2},
-	sounds = default.node_sound_stone_defaults(),
+	sounds = default.node_sound_metal_defaults(),
 	on_construct = function(pos)
 		local event = {type="program"}
 		run(pos,event)
@@ -322,11 +359,11 @@ minetest.register_node("ltc4000e:controller", {
 	end,
 	node_box = {
 		type = "fixed",
-		fixed = nodebox
+		fixed = polemount_nodebox
     	},
 	selection_box = {
 		type = "fixed",
-		fixed = nodebox
+		fixed = polemount_nodebox
     	},
 	on_receive_fields = ts_on_receive_fields,
 	digiline = 
@@ -343,12 +380,150 @@ minetest.register_node("ltc4000e:controller", {
 		},
 	},
 })
+minetest.register_alias("ltc4000e:controller","ltc4000e:polemount")
+
+local bottom_nodebox = {
+	{ -0.5, -0.5, -0.5, 0.5, -0.2, 0.5 }, --Bottom slab
+	{ -0.4, -0.2, -0.3, 0.4, 0.5, 0.3 }, --Main cabinet
+	{ -0.4, -0.157, -0.35, 0.4, 0.5, -0.3 }, --Door
+}
+
+local top_nodebox = {
+	{ -0.4, -0.5, -0.3, 0.4, 0.3, 0.3 }, --Main cabinet
+	{ -0.4, -0.5, -0.35, 0.4, 0.157, -0.3 }, --Door
+	{ -0.4, 0.2, -0.4, 0.4, 0.3, -0.3 }, --Overhang
+}
+
+minetest.register_node("ltc4000e:nema_bottom", {
+	tiles = {
+		"ltc4000e_cabinet_bottom_topbottom.png",
+		"ltc4000e_cabinet_bottom_topbottom.png",
+		"ltc4000e_cabinet_bottom_right.png",
+		"ltc4000e_cabinet_bottom_left.png",
+		"ltc4000e_cabinet_bottom_back.png",
+		"ltc4000e_cabinet_bottom_front.png",
+	},
+	description = "LTC-4000E Traffic Signal Controller (NEMA Cabinet)",
+	paramtype = "light",
+	paramtype2 = "facedir",
+	drawtype = "nodebox",
+	inventory_image = "ltc4000e_cabinet_inv.png",
+	wield_image = "ltc4000e_cabinet_inv.png",
+	groups = {dig_immediate=2},
+	sounds = default.node_sound_metal_defaults(),
+	after_place_node = function(pos,placer)
+		local node = minetest.get_node(pos)
+		local toppos = {x=pos.x,y=pos.y + 1,z=pos.z}
+		local topnode = minetest.get_node(toppos)
+		local placername = placer:get_player_name()
+		if topnode.name ~= "air" then
+			if placer:is_player() then
+				minetest.chat_send_player(placername,"Can't place cabinet - no room for the top half!")
+			end
+			minetest.set_node(pos,{name="air"})
+			return true
+		end
+		if minetest.is_protected(toppos,placername) and not minetest.check_player_privs(placername,{protection_bypass=true}) then
+			if placer:is_player() then
+				minetest.chat_send_player(placername,"Can't place cabinet - top half is protected!")
+				minetest.record_protection_violation(toppos,placername)
+			end
+			minetest.set_node(pos,{name="air"})
+			return true
+		end
+		node.name = "ltc4000e:nema_top"
+		minetest.set_node(toppos,node)
+	end,
+	on_construct = function(pos)
+		local event = {type="program"}
+		run(pos,event)
+	end,
+	on_destruct = function(pos)
+		pos.y = pos.y + 1
+		if minetest.get_node(pos).name == "ltc4000e:nema_top" then
+			minetest.set_node(pos,{name="air"})
+		end
+	end,
+	on_rotate = function(pos,node,user,mode,new_param2)
+		if not screwdriver then
+			return false
+		end
+		local ret = screwdriver.rotate_simple(pos,node,user,mode,new_param2)
+		minetest.after(0,function(pos)
+			local newnode = minetest.get_node(pos)
+			local param2 = newnode.param2
+			pos.y = pos.y + 1
+			local topnode = minetest.get_node(pos)
+			topnode.param2 = param2
+			minetest.set_node(pos,topnode)
+		end,pos)
+		return ret
+	end,
+	on_timer = function(pos)
+		local event = {}
+		event.type = "interrupt"
+		event.iid = "gapout"
+		run(pos,event)
+	end,
+	node_box = {
+		type = "fixed",
+		fixed = bottom_nodebox
+    	},
+	selection_box = {
+		type = "fixed",
+		fixed = {
+			{-0.5,-0.5,-0.5,0.5,-0.2,0.5},
+			{-0.4,-0.2,-0.4,0.4,1.3,0.3},
+		}
+    	},
+	on_receive_fields = ts_on_receive_fields,
+	digiline = 
+	{
+		receptor = {},
+		wire = {
+			rules = cabinet_digiline_rules,
+		},
+		effector = {
+			action = function(pos,_,channel,msg)
+					local event = {}
+					event.type = "digiline"
+					event.channel = channel
+					event.msg = msg
+					run(pos,event)
+				end
+		},
+	},
+})
+
+minetest.register_node("ltc4000e:nema_top", {
+	tiles = {
+		"ltc4000e_sides.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_cabinet_top_right.png",
+		"ltc4000e_cabinet_top_left.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_cabinet_top_front.png",
+	},
+	paramtype = "light",
+	paramtype2 = "facedir",
+	drawtype = "nodebox",
+	node_box = {
+		type = "fixed",
+		fixed = top_nodebox
+    	},
+	selection_box = {
+		type = "fixed",
+		fixed = {0,0,0,0,0,0}
+    	},
+	groups = {not_in_creative_inventory=1},
+	sounds = default.node_sound_metal_defaults()
+})
 
 --Make sure lights don't "stall" if unloaded
 minetest.register_lbm({
 	label = "Restart LTC-4000E timers",
 	name = "ltc4000e:restart_timers",
-	nodenames = {"ltc4000e:controller"},
+	nodenames = {"ltc4000e:polemount","ltc4000e:nema_bottom"},
 	run_at_every_load = true,
 	action = function(pos)
 		local meta = minetest.get_meta(pos)
@@ -362,9 +537,9 @@ minetest.register_lbm({
 	end
 })
 
---Crafting recipe
+--Crafting recipes
 minetest.register_craft({
-	output = "ltc4000e:controller",
+	output = "ltc4000e:polemount",
 	recipe = {
 		{"default:steelblock","streets:bigpole","default:steelblock"},
 		{"default:steelblock","mesecons_luacontroller:luacontroller0000","default:steelblock"},
@@ -373,10 +548,28 @@ minetest.register_craft({
 })
 
 minetest.register_craft({
-	output = "ltc4000e:controller",
+	output = "ltc4000e:polemount",
 	recipe = {
 		{"moreblocks:slab_steelblock_1","streets:bigpole","moreblocks:slab_steelblock_1"},
 		{"moreblocks:slab_steelblock_1","mesecons_luacontroller:luacontroller0000","moreblocks:slab_steelblock_1"},
 		{"moreblocks:slab_steelblock_1","digistuff:touchscreen","moreblocks:slab_steelblock_1"},
+	}
+})
+
+minetest.register_craft({
+	output = "ltc4000e:nema_bottom",
+	recipe = {
+		{"default:steelblock","default:steelblock","default:steelblock"},
+		{"default:steelblock","ltc4000e:polemount","default:steelblock"},
+		{"default:steelblock","doors:door_steel","default:steelblock"},
+	}
+})
+
+minetest.register_craft({
+	output = "ltc4000e:nema_bottom",
+	recipe = {
+		{"moreblocks:slab_steelblock_1","moreblocks:slab_steelblock_1","moreblocks:slab_steelblock_1"},
+		{"moreblocks:slab_steelblock_1","ltc4000e:polemount","moreblocks:slab_steelblock_1"},
+		{"moreblocks:slab_steelblock_1","doors:door_steel","moreblocks:slab_steelblock_1"},
 	}
 })
