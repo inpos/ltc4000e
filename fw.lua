@@ -15,6 +15,16 @@ modes = {"Sensor","Timer","Phase Lock"}
 panellock = {"Unlocked","Locked"}
 logmodes = {"Quiet","Normal","Verbose"}
 
+--Only accept digilines signals on the necessary channels
+local event_ok = false
+if event.type ~= "digiline" then event_ok = true end
+if (not event_ok) and (string.find(event.channel,"detector") or string.find(event.channel,"preempt")) then event_ok = true end
+if (not event_ok) and (event.channel == "touchscreen") then event_ok = true end
+if not event_ok then
+	--Digilines signal on unimportant channel, stop execution
+	return
+end
+
 --Used for reverse lookups
 function pivot(table)
 	local out = {}

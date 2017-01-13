@@ -528,7 +528,7 @@ minetest.register_lbm({
 	action = function(pos)
 		local meta = minetest.get_meta(pos)
 		local mem = minetest.deserialize(meta:get_string("mem"))
-		if mem.cycle then
+		if mem and mem.cycle then
 			local event = {}
 			event.type = "interrupt"
 			event.iid = "tick"
