@@ -279,6 +279,8 @@ local function run(pos,event)
 	end
 
 	function context.interrupt(time,iid)
+		--Enforce a minimum interrupt time of half a second
+		time = math.max(time,0.5)
 		if iid == "gapout" then
 			--This one can have the time changed on-the-fly, so it has to be done with node timers
 			local timer = minetest.get_node_timer(pos)
