@@ -192,8 +192,6 @@ if event.type == "interrupt" and (event.iid == "gapout" or event.iid == "maxgree
 		end
 		--Either gapped out or reached max green, go to next step
 		interrupt(0,"tick")
-
-		interrupt(nil,"gapout")
 	end
 end
 

@@ -171,6 +171,11 @@ end
 
 local function update_ts_formspec(pos,data)
 	local meta = minetest.get_meta(pos)
+	local node = minetest.get_node(pos)
+	if node.name == "ltc4000e:nema_bottom" then
+		meta:set_string("formspec","")
+		return
+	end
 	local fs = "size[12,8]"..
 		"background[0,0;0,0;ltc4000e_formspec_bg.png;true]"
 	for _,field in pairs(data) do
@@ -467,6 +472,41 @@ minetest.register_node("ltc4000e:nema_bottom", {
 		event.iid = "gapout"
 		run(pos,event)
 	end,
+	on_punch = function(pos,node,puncher)
+		if not puncher:is_player() then
+			return
+		end
+		local name = puncher:get_player_name()
+		if minetest.is_protected(pos,name) and not minetest.check_player_privs(name,{protection_bypass=true}) then
+			minetest.chat_send_player(name,"Can't open cabinet - cabinet is locked.")
+			minetest.record_protection_violation(pos,name)
+			return
+		end
+		local vpos = vector.new(pos.x,pos.y,pos.z)
+		local backdir = minetest.facedir_to_dir(node.param2)
+		local frontpos = vector.add(vpos,vector.multiply(backdir,-1))
+		local fronttoppos = vector.add(frontpos,vector.new(0,1,0))
+		local frontnode = minetest.get_node(frontpos)
+		local fronttopnode = minetest.get_node(fronttoppos)
+		if frontnode.name ~= "air" or fronttopnode.name ~= "air" then
+			minetest.chat_send_player(name,"Can't open cabinet - something is in the way")
+			return
+		end
+		minetest.set_node(frontpos,{name="ltc4000e:door_bottom",param2=node.param2})
+		minetest.set_node(fronttoppos,{name="ltc4000e:door_top",param2=node.param2})
+		node.name = "ltc4000e:nema_bottom_open"
+		minetest.swap_node(pos,node)
+		ts_on_digiline_receive(pos,{})
+		pos.y = pos.y + 1
+		node = minetest.get_node(pos)
+		node.name = "ltc4000e:nema_top_open"
+		minetest.swap_node(pos,node)
+		minetest.sound_play("doors_steel_door_open",{
+			pos = pos,
+			gain = 0.5,
+			max_hear_distance = 10
+		})
+	end,
 	node_box = {
 		type = "fixed",
 		fixed = bottom_nodebox
@@ -521,11 +561,199 @@ minetest.register_node("ltc4000e:nema_top", {
 	sounds = default.node_sound_metal_defaults()
 })
 
+local bottom_open_nodebox = {
+	{ -0.5, -0.5, -0.5, 0.5, -0.2, 0.5 }, --Bottom slab
+	{ -0.4, -0.2, -0.3, 0.4, 0.5, 0.3 }, --Main cabinet
+	{ -0.4, -0.157, -0.3, -0.35, 0.5, -0.5 }, --Door
+}
+
+local top_open_nodebox = {
+	{ -0.4, -0.5, -0.3, 0.4, 0.3, 0.3 }, --Main cabinet
+	{ -0.4, 0.2, -0.4, 0.4, 0.3, -0.3 }, --Overhang
+	{ -0.4, -0.5, -0.3, -0.35, 0.157, -0.5 }, --Door
+}
+
+local door_bottom_nodebox = {
+	{ -0.4, -0.157, 0.5, -0.35, 0.5, -0.1 }, --Door
+}
+
+local door_top_nodebox = {
+	{ -0.4, -0.5, 0.5, -0.35, 0.157, -0.1 }, --Door
+}
+
+minetest.register_node("ltc4000e:nema_bottom_open", {
+	tiles = {
+		"ltc4000e_cabinet_bottom_topbottom.png",
+		"ltc4000e_cabinet_bottom_topbottom.png",
+		"ltc4000e_cabinet_bottom_right_open.png",
+		"ltc4000e_cabinet_bottom_left_open.png",
+		"ltc4000e_cabinet_bottom_back.png",
+		{
+			name="ltc4000e_cabinet_bottom_inside.png",
+			animation={type="vertical_frames", aspect_w=64, aspect_h=64, length=1.2},
+		}
+	},
+	paramtype = "light",
+	paramtype2 = "facedir",
+	drawtype = "nodebox",
+	drop = "ltc4000e:nema_bottom",
+	inventory_image = "ltc4000e_cabinet_inv.png",
+	wield_image = "ltc4000e_cabinet_inv.png",
+	groups = {dig_immediate=2,not_in_creative_inventory=1},
+	sounds = default.node_sound_metal_defaults(),
+	on_destruct = function(pos)
+		local node = minetest.get_node(pos)
+		local vpos = vector.new(pos.x,pos.y,pos.z)
+		pos.y = pos.y + 1
+		if minetest.get_node(pos).name == "ltc4000e:nema_top_open" then
+			minetest.set_node(pos,{name="air"})
+		end
+		local backdir = minetest.facedir_to_dir(node.param2)
+		local frontpos = vector.add(vpos,vector.multiply(backdir,-1))
+		local fronttoppos = vector.add(frontpos,vector.new(0,1,0))
+		minetest.set_node(frontpos,{name="air"})
+		minetest.set_node(fronttoppos,{name="air"})
+	end,
+	on_rotate = false,
+	on_timer = function(pos)
+		local event = {}
+		event.type = "interrupt"
+		event.iid = "gapout"
+		run(pos,event)
+	end,
+	on_punch = function(pos,node,puncher)
+		if not puncher:is_player() then
+			return
+		end
+		local name = puncher:get_player_name()
+		local vpos = vector.new(pos.x,pos.y,pos.z)
+		local backdir = minetest.facedir_to_dir(node.param2)
+		local frontpos = vector.add(vpos,vector.multiply(backdir,-1))
+		local fronttoppos = vector.add(frontpos,vector.new(0,1,0))
+		local frontnode = minetest.get_node(frontpos)
+		local fronttopnode = minetest.get_node(fronttoppos)
+		minetest.set_node(frontpos,{name="air"})
+		minetest.set_node(fronttoppos,{name="air"})
+		node.name = "ltc4000e:nema_bottom"
+		minetest.swap_node(pos,node)
+		ts_on_digiline_receive(pos,{})
+		pos.y = pos.y + 1
+		node = minetest.get_node(pos)
+		node.name = "ltc4000e:nema_top"
+		minetest.swap_node(pos,node)
+		minetest.sound_play("doors_steel_door_close",{
+			pos = pos,
+			gain = 0.5,
+			max_hear_distance = 10
+		})
+	end,
+	node_box = {
+		type = "fixed",
+		fixed = bottom_open_nodebox
+    	},
+	selection_box = {
+		type = "fixed",
+		fixed = {
+			{-0.5,-0.5,-0.5,0.5,-0.2,0.5},
+			{-0.4,-0.2,-0.4,0.4,1.3,0.3},
+		}
+    	},
+	on_receive_fields = ts_on_receive_fields,
+	digiline = 
+	{
+		receptor = {},
+		wire = {
+			rules = cabinet_digiline_rules,
+		},
+		effector = {
+			action = function(pos,_,channel,msg)
+					local event = {}
+					event.type = "digiline"
+					event.channel = channel
+					event.msg = msg
+					run(pos,event)
+				end
+		},
+	},
+})
+
+minetest.register_node("ltc4000e:nema_top_open", {
+	tiles = {
+		"ltc4000e_sides.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_cabinet_top_right_open.png",
+		"ltc4000e_cabinet_top_left_open.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_cabinet_top_inside.png",
+	},
+	paramtype = "light",
+	paramtype2 = "facedir",
+	drawtype = "nodebox",
+	node_box = {
+		type = "fixed",
+		fixed = top_open_nodebox
+    	},
+	selection_box = {
+		type = "fixed",
+		fixed = {0,0,0,0,0,0}
+    	},
+	groups = {not_in_creative_inventory=1},
+	sounds = default.node_sound_metal_defaults()
+})
+
+minetest.register_node("ltc4000e:door_bottom", {
+	tiles = {
+		"ltc4000e_sides.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_cabinet_top_right.png",
+		"ltc4000e_cabinet_door_bottom_outside.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_cabinet_top_front.png",
+	},
+	paramtype = "light",
+	paramtype2 = "facedir",
+	drawtype = "nodebox",
+	node_box = {
+		type = "fixed",
+		fixed = door_bottom_nodebox
+    	},
+	selection_box = {
+		type = "fixed",
+		fixed = {0,0,0,0,0,0}
+    	},
+	groups = {not_in_creative_inventory=1},
+	sounds = default.node_sound_metal_defaults()
+})
+
+minetest.register_node("ltc4000e:door_top", {
+	tiles = {
+		"ltc4000e_sides.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_cabinet_top_right.png",
+		"ltc4000e_cabinet_door_top_outside.png",
+		"ltc4000e_sides.png",
+		"ltc4000e_cabinet_top_front.png",
+	},
+	paramtype = "light",
+	paramtype2 = "facedir",
+	drawtype = "nodebox",
+	node_box = {
+		type = "fixed",
+		fixed = door_top_nodebox
+    	},
+	selection_box = {
+		type = "fixed",
+		fixed = {0,0,0,0,0,0}
+    	},
+	groups = {not_in_creative_inventory=1},
+	sounds = default.node_sound_metal_defaults()
+})
+
 --Make sure lights don't "stall" if unloaded
 minetest.register_lbm({
 	label = "Restart LTC-4000E timers",
 	name = "ltc4000e:restart_timers",
-	nodenames = {"ltc4000e:polemount","ltc4000e:nema_bottom"},
+	nodenames = {"ltc4000e:polemount","ltc4000e:nema_bottom","ltc4000e:nema_bottom_open"},
 	run_at_every_load = true,
 	action = function(pos)
 		local meta = minetest.get_meta(pos)
