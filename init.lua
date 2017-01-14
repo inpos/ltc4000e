@@ -236,7 +236,7 @@ local fw = loadfile(minetest.get_modpath("ltc4000e")..DIR_DELIM.."fw.lua")
 local function run(pos,event)
 	--Determine controller type
 	local node = minetest.get_node(pos)
-	local is_cabinet = (node.name == "ltc4000e:nema_bottom")
+	local is_cabinet = (node.name == "ltc4000e:nema_bottom" or node.name == "ltc4000e:nema_bottom_open")
 
 	--Initialize environment
 	local context = {}
