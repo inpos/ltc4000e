@@ -14,6 +14,8 @@ monitortypes = {"Straight","Left Turn","Pedestrian"}
 modes = {"Sensor","Timer","Phase Lock"}
 panellock = {"Unlocked","Locked"}
 logmodes = {"Quiet","Normal","Verbose"}
+pedrecallmodes = {"Never","Timer Only","Always"}
+ltrecallmodes = {"No","Yes"}
 
 --Only accept digilines signals on the necessary channels
 local event_ok = false
@@ -75,51 +77,54 @@ if event.type == "program" then
 	mem.menu = "run"
 	mem.monitor = 1
 	mem.monflash = false
-	if not mem.schedstart then mem.schedstart = 0 end
-	if not mem.schedend then mem.schedend = 0 end
-	if not mem.normalmode then
-		if mem.phaselocked then
-			mem.normalmode = 3
-		else
-			mem.normalmode = 1
-		end
-	end
-	if not mem.schedmode then mem.schedmode = 3 end
-	if not mem.ltatype then mem.ltatype = 1 end
-	if not mem.ltbtype then mem.ltbtype = 1 end
-	if not mem.ltctype then mem.ltctype = 1 end
-	if not mem.ltdtype then mem.ltdtype = 1 end
-	if not mem.pedatype then mem.pedatype = 1 end
-	if not mem.pedbtype then mem.pedbtype = 1 end
-	if not mem.pedctype then mem.pedctype = 1 end
-	if not mem.peddtype then mem.peddtype = 1 end
-	if not mem.signaltype then mem.signaltype = 2 end
-	if not mem.pedbuttontype then mem.pedbuttontype = 1 end
-	if not mem.allreda then mem.allreda = 2 end
-	if not mem.allredb then mem.allredb = 2 end
-	if not mem.yellowa then mem.yellowa = 3 end
-	if not mem.yellowb then mem.yellowb = 3 end
-	if not mem.minsidegreen then mem.minsidegreen = (mem.sidegreen or 7) end
-	if not mem.gapout then mem.gapout = 3 end
-	if not mem.maxsidegreen then mem.maxsidegreen = 20 end
-	if not mem.mindwell then mem.mindwell = 10 end
-	if not mem.pedwarn then mem.pedwarn = 7 end
-	if not mem.sideped then mem.sideped = 5 end
-	if not mem.llturn then mem.llturn = 4 end
-	if not mem.name then mem.name = "Unnamed Intersection" end
-	if not mem.logmode then mem.logmode = 2 end
-	if not mem.lock then mem.lock = 2 end
 	mem.stats = {a = 0,b = 0,c = 0,d = 0,at = 0,bt = 0,ct = 0,dt = 0,ap = 0,bp = 0,cp = 0,dp = 0,cycles = 0,lastreset = os.time()}
 	mem.det = {}
 	mem.busy = false
 	mem.preempt = nil
 	mem.cycle = nil
 	mem.currentphase = {a = "G",b = "R",c = "G",d = "R",at = "R",bt = "R",ct = "R",dt = "R",ap = "R",bp = "R",cp = "R",dp = "R"}
-	if not mem.phaselock then mem.phaselock = {a = "FR",b = "FR",c = "FR",d = "FR",at = "FR",bt = "FR",ct = "FR",dt = "FR",ap = "O",bp = "O",cp = "O",dp = "O"} end
+	mem.phaselock = {a = "FR",b = "FR",c = "FR",d = "FR",at = "FR",bt = "FR",ct = "FR",dt = "FR",ap = "O",bp = "O",cp = "O",dp = "O"}
 	mem.phaselocked = false
 	mem.faultlog = {}
 	log("Chip programmed",true)
 end
+
+if not mem.schedstart then mem.schedstart = 0 end
+if not mem.schedend then mem.schedend = 0 end
+if not mem.normalmode then
+	if mem.phaselocked then
+		mem.normalmode = 3
+	else
+		mem.normalmode = 1
+	end
+end
+if not mem.ltrecallmode then mem.ltrecallmode = 2 end
+if not mem.pedrecallmode then mem.pedrecallmode = 2 end
+if not mem.schedmode then mem.schedmode = 3 end
+if not mem.ltatype then mem.ltatype = 1 end
+if not mem.ltbtype then mem.ltbtype = 1 end
+if not mem.ltctype then mem.ltctype = 1 end
+if not mem.ltdtype then mem.ltdtype = 1 end
+if not mem.pedatype then mem.pedatype = 1 end
+if not mem.pedbtype then mem.pedbtype = 1 end
+if not mem.pedctype then mem.pedctype = 1 end
+if not mem.peddtype then mem.peddtype = 1 end
+if not mem.signaltype then mem.signaltype = 2 end
+if not mem.pedbuttontype then mem.pedbuttontype = 1 end
+if not mem.allreda then mem.allreda = 2 end
+if not mem.allredb then mem.allredb = 2 end
+if not mem.yellowa then mem.yellowa = 3 end
+if not mem.yellowb then mem.yellowb = 3 end
+if not mem.minsidegreen then mem.minsidegreen = (mem.sidegreen or 7) end
+if not mem.gapout then mem.gapout = 3 end
+if not mem.maxsidegreen then mem.maxsidegreen = 20 end
+if not mem.mindwell then mem.mindwell = 10 end
+if not mem.pedwarn then mem.pedwarn = 7 end
+if not mem.sideped then mem.sideped = 5 end
+if not mem.llturn then mem.llturn = 4 end
+if not mem.name then mem.name = "Unnamed Intersection" end
+if not mem.logmode then mem.logmode = 2 end
+if not mem.lock then mem.lock = 2 end
 
 --Handle special modes
 was_phaselocked = mem.phaselocked
@@ -133,13 +138,26 @@ if was_phaselocked and not mem.phaselocked then
 	interrupt(0,"tick")
 end
 if mem.timed then
-	mem.det = {a = true,b = true,c = true,d = true,ap = true,bp = true,cp = true,dp = true,at = true,bt = true,ct = true,dt = true}
+	mem.det.b = true
+	mem.det.d = true
+	if mem.ltrecallmode == 2 then
+		mem.det.at = true
+		mem.det.bt = true
+		mem.det.ct = true
+		mem.det.dt = true
+	end
+	if mem.pedrecallmode == 2 or mem.pedrecallmode == 3 then
+		mem.det.ap = true
+		mem.det.bp = true
+		mem.det.cp = true
+		mem.det.dp = true
+	end
 elseif was_timed then
 	mem.det = {}
 end
 
 --Detector signal handling
-if (not mem.timed and not mem.phaselocked and not mem.preempt) and event.type == "digiline" and string.sub(event.channel,1,9) == "detector_" then
+if (not mem.phaselocked and not mem.preempt) and event.type == "digiline" and string.sub(event.channel,1,9) == "detector_" then
 	local detname = string.sub(event.channel,10)
 	if mem.stats[detname] then
 		mem.stats[detname] = mem.stats[detname] + 1
@@ -165,6 +183,11 @@ if (not mem.timed and not mem.phaselocked and not mem.preempt) and event.type ==
 	else
 		log("Detector "..detname.." activated",true)
 		mem.det[detname] = true
+		if (detname == "b" or detname == "d") and mem.pedbtype == 2 and mem.pedrecallmode == 3 then
+			log("Performing pedestrian recall on ap and cp",true)
+			mem.det.ap = true
+			mem.det.cp = true
+		end
 	end
 end
 
@@ -288,7 +311,7 @@ if mem.busy and event.type == "interrupt" and event.iid == "tick" and not mem.ph
 		setlight("d","G")
 		if mem.ltbtype == 3 then setlight("bt","FY") end
 		if mem.ltdtype == 3 then setlight("dt","FY") end
-		if (mem.det.ap and mem.pedatype ~= 1) or (mem.det.cp and mem.pedctype ~= 1) and not mem.preempt then
+		if (mem.det.ap and mem.pedatype ~= 1) or (mem.det.cp and mem.pedctype ~= 1) or mem.pedrecallmode == 3 and not mem.preempt then
 			mem.cycle = "straight2.5"
 			if mem.pedatype ~= 1 then setlight("ap","G") end
 			if mem.pedctype ~= 1 then setlight("cp","G") end
@@ -335,7 +358,7 @@ if mem.busy and event.type == "interrupt" and event.iid == "tick" and not mem.ph
 		setlight("c","G")
 		if mem.ltatype == 3 then setlight("at","FY") end
 		if mem.ltctype == 3 then setlight("ct","FY") end
-		if (mem.det.bp and mem.pedbtype ~= 1) or (mem.det.dp and mem.peddtype ~= 1) then
+		if (mem.det.bp and mem.pedbtype ~= 1) or (mem.det.dp and mem.peddtype ~= 1) or (mem.pedrecallmode == 3 and not mem.wasped) then
 			mem.cycle = "sideped1"
 			if mem.ltatype == 3 and mem.pedbtype ~= 1 then setlight("at","R") end
 			if mem.ltctype == 3 and mem.peddtype ~= 1 then setlight("ct","R") end
@@ -345,6 +368,7 @@ if mem.busy and event.type == "interrupt" and event.iid == "tick" and not mem.ph
 				interrupt(0,"tick")
 			end
 		else
+			mem.wasped = false
 			interrupt(mem.mindwell,"tick")
 		end
 	elseif mem.cycle == "bdlead1" then
@@ -516,13 +540,21 @@ if mem.busy and event.type == "interrupt" and event.iid == "tick" and not mem.ph
 		if mem.peddtype ~= 1 then setlight("dp","G") end
 		interrupt(mem.sideped,"tick")
 	elseif mem.cycle == "sideped3" then
-		mem.cycle = "sideped4"
-		mem.det.bp = nil
-		mem.det.dp = nil
-		if mem.pedbtype ~= 1 then setlight("bp","FR") end
-		if mem.peddtype ~= 1 then setlight("dp","FR") end
-		interrupt(mem.pedwarn,"tick")
+		if not (mem.det.b or mem.det.d or mem.det.at or mem.det.bt or mem.det.ct or mem.det.dt or mem.det.ap or mem.det.cp) and (mem.pedrecallmode == 3 or mem.det.bp or mem.det.dp) then
+			mem.det.bp = nil
+			mem.det.dp = nil
+			interrupt(mem.sideped,"tick")
+			log("Extending bp/dp walk time",true)
+		else
+			mem.cycle = "sideped4"
+			mem.det.bp = nil
+			mem.det.dp = nil
+			if mem.pedbtype ~= 1 then setlight("bp","FR") end
+			if mem.peddtype ~= 1 then setlight("dp","FR") end
+			interrupt(mem.pedwarn,"tick")
+		end
 	elseif mem.cycle == "sideped4" then
+		mem.wasped = true
 		if mem.det.b or mem.det.d or mem.det.at or mem.det.bt or mem.det.ct or mem.det.dt or mem.det.ap or mem.det.cp then
 			mem.cycle = "reset"
 			interrupt(mem.allredb,"tick")
@@ -535,6 +567,7 @@ if mem.busy and event.type == "interrupt" and event.iid == "tick" and not mem.ph
 	elseif mem.cycle == "reset" then
 		mem.cycle = nil
 		mem.busy = false
+		mem.wasped = false
 		--If someone shows up on AT/CT and turns immediately,
 		--we shouldn't change for them unless we're completely idle or protected only
 		if mem.ltatype ~= 2 then mem.det.at = nil end
@@ -651,6 +684,8 @@ if event.type == "digiline" and event.channel == "touchscreen" then
 			mem.menu = "main"
 		elseif fields.save then
 			mem.menu = "main"
+			mem.pedrecallmode = pivot(pedrecallmodes)[fields.pedrecall]
+			mem.ltrecallmode = pivot(ltrecallmodes)[fields.ltrecall]
 			mem.allreda = tonumber(fields.allreda) or mem.allreda
 			mem.allredb = tonumber(fields.allredb) or mem.allredb
 			mem.yellowa = tonumber(fields.yellowa) or mem.yellowa
@@ -824,6 +859,10 @@ elseif mem.menu == "timing" then
 	table.insert(disp,{command="addfield",X=0.25,Y=4,W=2.25,H=1,name="yellowa",label="Yellow A/C->B/D",default=tostring(mem.yellowa)})
 	table.insert(disp,{command="addfield",X=0.25,Y=5.5,W=2.25,H=1,name="yellowb",label="Yellow B/D->A/C",default=tostring(mem.yellowb)})
 	table.insert(disp,{command="addfield",X=3.25,Y=1,W=2.25,H=1,name="mindwell",label="Minimum Dwell",default=tostring(mem.mindwell)})
+	table.insert(disp,{command="addlabel",X=5.9,Y=0.45,label="Pedestrian Recall"})
+	table.insert(disp,{command="adddropdown",X=5.9,Y=0.85,W=2.25,H=1,name="pedrecall",selected_id=mem.pedrecallmode,choices=pedrecallmodes})
+	table.insert(disp,{command="addlabel",X=5.9,Y=1.95,label="LT Recall in Timer Mode"})
+	table.insert(disp,{command="adddropdown",X=5.9,Y=2.35,W=2.25,H=1,name="ltrecall",selected_id=mem.ltrecallmode,choices=ltrecallmodes})
 	table.insert(disp,{command="addfield",X=3.25,Y=4,W=2.25,H=1,name="pedwarn",label="Pedestrian Warn",default=tostring(mem.pedwarn)})
 	table.insert(disp,{command="addfield",X=3.25,Y=5.5,W=2.25,H=1,name="sideped",label="B/D Pedestrian Walk",default=tostring(mem.sideped)})
 	table.insert(disp,{command="addfield",X=3.25,Y=2.5,W=2.25,H=1,name="llturn",label="Lead/Lag Turn",default=tostring(mem.llturn)})
