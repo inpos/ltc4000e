@@ -901,7 +901,8 @@ elseif mem.menu == "log" then
 		table.insert(disp,{command="addlabel",X=0,Y=1.5,label="No Faults"})
 	end
 elseif mem.menu == "monitoring" then
-	interrupt(0.6,"monflash")
+	--interrupt(0.6,"monflash")
+	mem.monflash = true
 
 	local monitor_textures = {}
 	monitor_textures.O = "streets_tl_off.png"
