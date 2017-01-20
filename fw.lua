@@ -157,7 +157,7 @@ elseif was_timed then
 end
 
 --Detector signal handling
-if (not mem.phaselocked and not mem.preempt) and event.type == "digiline" and string.sub(event.channel,1,9) == "detector_" then
+if (not mem.phaselocked and not mem.preempt) and event.type == "digiline" and string.sub(event.channel,1,9) == "detector_" and not mem.stoptime then
 	local detname = string.sub(event.channel,10)
 	if mem.stats[detname] then
 		mem.stats[detname] = mem.stats[detname] + 1
@@ -191,7 +191,7 @@ if (not mem.phaselocked and not mem.preempt) and event.type == "digiline" and st
 	end
 end
 
-if event.type == "digiline" and mem.pedbuttontype == 2 and event.channel == "pedbutton" then
+if event.type == "digiline" and mem.pedbuttontype == 2 and event.channel == "pedbutton" and not mem.stoptime then
 	if event.msg == "main" then
 		log("Emulating detector_ap/cp for TrafficNeXt compatibility",true)
 		mem.det.ap = true
@@ -214,6 +214,8 @@ if event.type == "interrupt" and (event.iid == "gapout" or event.iid == "maxgree
 			log("Reached maximum green",true)
 		end
 		--Either gapped out or reached max green, go to next step
+		interrupt(nil,"gapout")
+		interrupt(nil,"maxgreen")
 		interrupt(0,"tick")
 	end
 end
@@ -224,7 +226,7 @@ if (event.channel == "detector_b" or event.channel == "detector_d") and (mem.cyc
 end
 
 --Preemption logic
-if event.type == "digiline" and string.sub(event.channel,1,8) == "preempt_" then
+if event.type == "digiline" and string.sub(event.channel,1,8) == "preempt_" and not mem.stoptime then
 	log("Preemption detector activated",true)
 	mem.preempt = string.sub(event.channel,9,10)
 	log("Entering preemption on approach "..mem.preempt.." from state "..(mem.cycle or "idle"),true)
@@ -251,7 +253,7 @@ if event.type == "digiline" and string.sub(event.channel,1,8) == "preempt_" then
 end
 
 --Phase logic for already-running cycles
-if mem.busy and event.type == "interrupt" and event.iid == "tick" and not mem.phaselocked then
+if mem.busy and event.type == "interrupt" and (event.iid == "tick" or event.iid == "manualtick") and not mem.phaselocked and (event.iid == "manualtick" or not mem.stoptime) then
 	log("Continuing existing cycle at phase "..mem.cycle,true)
 	if mem.cycle == "preempt_yellow" then
 		for k,v in pairs(mem.currentphase) do
@@ -580,7 +582,7 @@ end
 --Phase logic for starting new cycles
 detactive = false
 for _,_ in pairs(mem.det) do detactive = true end
-if (not mem.busy) and detactive then
+if (not mem.busy) and detactive and (not mem.stoptime) then
 	if mem.phaselocked then
 		log("Not starting cycle due to phase lock",true)
 	elseif mem.preempt then
@@ -656,6 +658,8 @@ if event.type == "digiline" and event.channel == "touchscreen" then
 			mem.menu = "stats"
 		elseif fields.mode then
 			mem.menu = "mode"
+		elseif fields.diag then
+			mem.menu = "diag"
 		end
 	elseif mem.menu == "run" then
 		if fields.menu then
@@ -712,7 +716,7 @@ if event.type == "digiline" and event.channel == "touchscreen" then
 			for _,v in pairs({"a","b","c","d","at","bt","ct","dt","ap","bp","cp","dp"}) do
 				if fields[v] then
 					mem.det[v] = true
-					interrupt(0) --Forces the program to be re-run since the cycle logic is up there ^^
+					interrupt(0,"tick") --Forces the program to be re-run since the cycle logic is up there ^^
 				end
 			end
 		end
@@ -770,12 +774,46 @@ if event.type == "digiline" and event.channel == "touchscreen" then
 			mem.normalmode = pivot(modes)[fields.normalmode]
 			mem.schedmode = pivot(modes)[fields.schedmode]
 			mem.menu = "main"
-			interrupt(0) -- Some of these need to take immediate effect
+			interrupt(0,"rerun") -- Some of these need to take immediate effect
+		end
+	elseif mem.menu == "diag" then
+		if fields.cancel then
+			mem.menu = "main"
+		elseif fields.startstop then
+			if mem.stoptime then
+				mem.stoptime = false
+				interrupt(1,"tick")
+			else
+				mem.stoptime = true
+				interrupt(nil,"tick")
+			end
+		elseif fields.stepnow then
+			interrupt(0,"manualtick")
+		elseif fields.reboot then
+			mem.phaselocked = true
+			mem.cycle = nil
+			mem.menu = "reboot"
+			mem.busy = false
+			mem.preempt = nil
+			mem.stoptime = true
+			interrupt(10,"reboot")
+			interrupt(nil,"step")
+			interrupt(nil,"rerun")
+			interrupt(nil,"gapout")
+			interrupt(nil,"maxgreen")
 		end
 	else
 		logfault("Unrecognized menu "..mem.menu,false)
 		mem.menu = "run"
 	end
+end
+
+if event.iid == "reboot" then
+	mem.phaselocked = false
+	mem.menu = "main"
+	mem.stoptime = false
+	mem.cycle = nil
+	interrupt(0,"tick")
 end
 
 --Light control signal sending
@@ -815,6 +853,7 @@ if mem.menu == "main" then
 	table.insert(disp,{command="addbutton",X=7,Y=5,W=2,H=1,name="mancyc",label="Manual Call Entry"})
 	table.insert(disp,{command="addbutton",X=1,Y=7,W=2,H=1,name="stats",label="Statistics"})
 	table.insert(disp,{command="addbutton",X=4,Y=7,W=2,H=1,name="mode",label="Mode/Schedule"})
+	table.insert(disp,{command="addbutton",X=7,Y=7,W=2,H=1,name="diag",label="Diagnostics"})
 elseif mem.menu == "run" then
 	table.insert(disp,{command="addlabel",X=0,Y=0,label=mem.name})
 	table.insert(disp,{command="addlabel",X=0,Y=1,label="Advanced Mesecons Devices LTC-4000E"})
@@ -901,8 +940,7 @@ elseif mem.menu == "log" then
 		table.insert(disp,{command="addlabel",X=0,Y=1.5,label="No Faults"})
 	end
 elseif mem.menu == "monitoring" then
-	--interrupt(0.6,"monflash")
-	mem.monflash = true
+	interrupt(1,"monflash")
 
 	local monitor_textures = {}
 	monitor_textures.O = "streets_tl_off.png"
@@ -1130,6 +1168,16 @@ elseif mem.menu == "mode" then
 	table.insert(disp,{command="addfield",X=0.5,Y=5.5,W=2,H=1,name="schedend",label="Schedule End Hour",default=tostring(mem.schedend)})
 	table.insert(disp,{command="addbutton",X=3,Y=7,W=2,H=1,name="save",label="Save"})
 	table.insert(disp,{command="addbutton",X=6,Y=7,W=2,H=1,name="cancel",label="Cancel"})
+elseif mem.menu == "diag" then
+	table.insert(disp,{command="addlabel",X=0,Y=0,label="Diagnostics"})
+	table.insert(disp,{command="addlabel",X=0,Y=1,label="State: "..(mem.cycle or "Idle")})
+	table.insert(disp,{command="addbutton",X=0,Y=2,W=2,H=1,name="startstop",label=(mem.stoptime and "Start Time" or "Stop Time")})
+	table.insert(disp,{command="addbutton",X=0,Y=3,W=2,H=1,name="stepnow",label="Next Step"})
+	table.insert(disp,{command="addbutton",X=0,Y=5,W=2,H=1,name="reboot",label="Reboot"})
+	table.insert(disp,{command="addbutton",X=0,Y=7,W=2,H=1,name="cancel",label="Back"})
+elseif mem.menu == "reboot" then
+	table.insert(disp,{command="addlabel",X=0,Y=0,label="Rebooting, please wait..."})
+	table.insert(disp,{command="addlabel",X=0,Y=0.5,label="This will take about 10 seconds."})
 else
 	logfault("Unrecognized menu "..mem.menu,false)
 	mem.menu = "run"

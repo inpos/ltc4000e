@@ -230,6 +230,43 @@ local function ts_on_digiline_receive(pos,msg)
 	update_ts_formspec(pos,data)
 end
 
+--Interrupt node timer stuff
+local function getnextinterrupt(interrupts)
+	local nextint = 0
+	for k,v in pairs(interrupts) do
+		if nextint == 0 or v < nextint then
+			nextint = v
+		end
+	end
+	if nextint ~= 0 then return(nextint) end
+end
+
+local function getcurrentinterrupts(interrupts)
+	local current = {}
+	for k,v in pairs(interrupts) do
+		if v <= os.time() then
+			table.insert(current,k)
+		end
+	end
+	return(current)
+end
+
+local function setinterrupt(pos,time,iid)
+	local meta = minetest.get_meta(pos)
+	local timer = minetest.get_node_timer(pos)
+	local interrupts = minetest.deserialize(meta:get_string("interrupts")) or {}
+	if time == nil then
+		interrupts[iid] = nil
+	else
+		interrupts[iid] = os.time()+time
+	end
+	local nextint = getnextinterrupt(interrupts)
+	if nextint then
+		timer:start(nextint-os.time())
+	end
+	meta:set_string("interrupts",minetest.serialize(interrupts))
+end
+
 --Load the (mostly unmodified) firmware
 local fw = loadfile(minetest.get_modpath("ltc4000e")..DIR_DELIM.."fw.lua")
 
@@ -284,22 +321,9 @@ local function run(pos,event)
 	end
 
 	function context.interrupt(time,iid)
-		--Enforce a minimum interrupt time of half a second
-		time = math.max(time,0.5)
-		if iid == "gapout" then
-			--This one can have the time changed on-the-fly, so it has to be done with node timers
-			local timer = minetest.get_node_timer(pos)
-			if time then
-				timer:start(time)
-			else
-				timer:stop()
-			end
-		else
-			local event = {}
-			event.type = "interrupt"
-			event.iid = iid
-			minetest.after(time,run,pos,event)
-		end
+		--Enforce a minimum interrupt time of one second
+		if time ~= nil then time = math.max(time,1) end
+		setinterrupt(pos,time,iid)
 	end
 
 	--This is where the magic happens...
@@ -314,6 +338,33 @@ local function run(pos,event)
 
 	--Save memory after execution
 	meta:set_string("mem",minetest.serialize(context.mem))
+end
+
+local function oninterrupt(pos)
+	local meta = minetest.get_meta(pos)
+	local timer = minetest.get_node_timer(pos)
+	local interrupts = minetest.deserialize(meta:get_string("interrupts")) or {}
+	local current = getcurrentinterrupts(interrupts)
+	for _,i in ipairs(current) do
+		interrupts[i] = nil
+		local event = {}
+		event.type = "interrupt"
+		event.iid = i
+		run(pos,event)
+	end
+	local interrupts = minetest.deserialize(meta:get_string("interrupts")) or {} --Reload as it may have changed
+	for _,i in ipairs(current) do
+		if interrupts[i] and interrupts[i] <= os.time() then
+			interrupts[i] = nil
+		end
+	end
+	local nextint = getnextinterrupt(interrupts)
+	if nextint then
+		timer:start(nextint-os.time())
+	else
+		timer:stop()
+	end
+	meta:set_string("interrupts",minetest.serialize(interrupts))
 end
 
 local function ts_on_receive_fields(pos,formname,fields,sender)
@@ -358,12 +409,7 @@ minetest.register_node("ltc4000e:polemount", {
 		local event = {type="program"}
 		run(pos,event)
 	end,
-	on_timer = function(pos)
-		local event = {}
-		event.type = "interrupt"
-		event.iid = "gapout"
-		run(pos,event)
-	end,
+	on_timer = oninterrupt,
 	node_box = {
 		type = "fixed",
 		fixed = polemount_nodebox
@@ -466,12 +512,7 @@ minetest.register_node("ltc4000e:nema_bottom", {
 		end,pos)
 		return ret
 	end,
-	on_timer = function(pos)
-		local event = {}
-		event.type = "interrupt"
-		event.iid = "gapout"
-		run(pos,event)
-	end,
+	on_timer = oninterrupt,
 	on_punch = function(pos,node,puncher)
 		if not puncher:is_player() then
 			return
@@ -615,12 +656,7 @@ minetest.register_node("ltc4000e:nema_bottom_open", {
 		minetest.set_node(fronttoppos,{name="air"})
 	end,
 	on_rotate = false,
-	on_timer = function(pos)
-		local event = {}
-		event.type = "interrupt"
-		event.iid = "gapout"
-		run(pos,event)
-	end,
+	on_timer = oninterrupt,
 	on_punch = function(pos,node,puncher)
 		if not puncher:is_player() then
 			return
@@ -749,12 +785,11 @@ minetest.register_node("ltc4000e:door_top", {
 	sounds = default.node_sound_metal_defaults()
 })
 
---Make sure lights don't "stall" if unloaded
+--Make sure lights don't "stall" if unloaded and not yet converted to node timers
 minetest.register_lbm({
 	label = "Restart LTC-4000E timers",
 	name = "ltc4000e:restart_timers",
 	nodenames = {"ltc4000e:polemount","ltc4000e:nema_bottom","ltc4000e:nema_bottom_open"},
-	run_at_every_load = true,
 	action = function(pos)
 		local meta = minetest.get_meta(pos)
 		local mem = minetest.deserialize(meta:get_string("mem"))
