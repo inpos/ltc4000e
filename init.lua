@@ -332,7 +332,7 @@ local function run(pos,event)
 	--Run code
 	local success,err = pcall(fw)
 	if not success then
-		print("Error in LTC-4000E execution, aborting: "..err)
+		print("Ошибка выполнения в LTC-4000E, прекращаем работу: "..err)
 		return
 	end
 
@@ -375,7 +375,7 @@ local function ts_on_receive_fields(pos,formname,fields,sender)
 	local is_protected = minetest.is_protected(pos,playername)
 	if (locked and is_protected) and not can_bypass then
 		minetest.record_protection_violation(pos,playername)
-		minetest.chat_send_player(playername,"You are not authorized to use this controller.")
+		minetest.chat_send_player(playername,"У вас нет права использовать этот контроллер.")
 		return
 	end
 	local event = {}
@@ -399,7 +399,7 @@ minetest.register_node("ltc4000e:polemount", {
 		"ltc4000e_sides.png",
 		"ltc4000e_polemount_front.png",
 	},
-	description = "LTC-4000E Traffic Signal Controller (Pole-Mount)",
+	description = "Сигнальный контроллер движения LTC-4000E (полярный монтаж)",
 	paramtype = "light",
 	paramtype2 = "facedir",
 	drawtype = "nodebox",
@@ -456,7 +456,7 @@ minetest.register_node("ltc4000e:nema_bottom", {
 		"ltc4000e_cabinet_bottom_back.png",
 		"ltc4000e_cabinet_bottom_front.png",
 	},
-	description = "LTC-4000E Traffic Signal Controller (NEMA Cabinet)",
+	description = "Сигнальный контроллер движения LTC-4000E (шкаф NEMA)",
 	paramtype = "light",
 	paramtype2 = "facedir",
 	drawtype = "nodebox",
@@ -471,14 +471,14 @@ minetest.register_node("ltc4000e:nema_bottom", {
 		local placername = placer:get_player_name()
 		if topnode.name ~= "air" then
 			if placer:is_player() then
-				minetest.chat_send_player(placername,"Can't place cabinet - no room for the top half!")
+				minetest.chat_send_player(placername,"Невозможно установить шкаф - нет места для верхней части!")
 			end
 			minetest.set_node(pos,{name="air"})
 			return true
 		end
 		if minetest.is_protected(toppos,placername) and not minetest.check_player_privs(placername,{protection_bypass=true}) then
 			if placer:is_player() then
-				minetest.chat_send_player(placername,"Can't place cabinet - top half is protected!")
+				minetest.chat_send_player(placername,"Невозможно установить шкаф - верхняя часть защищена!")
 				minetest.record_protection_violation(toppos,placername)
 			end
 			minetest.set_node(pos,{name="air"})
@@ -519,7 +519,7 @@ minetest.register_node("ltc4000e:nema_bottom", {
 		end
 		local name = puncher:get_player_name()
 		if minetest.is_protected(pos,name) and not minetest.check_player_privs(name,{protection_bypass=true}) then
-			minetest.chat_send_player(name,"Can't open cabinet - cabinet is locked.")
+			minetest.chat_send_player(name,"Невозможно открыть шкаф - закрыт.")
 			minetest.record_protection_violation(pos,name)
 			return
 		end
@@ -530,7 +530,7 @@ minetest.register_node("ltc4000e:nema_bottom", {
 		local frontnode = minetest.get_node(frontpos)
 		local fronttopnode = minetest.get_node(fronttoppos)
 		if frontnode.name ~= "air" or fronttopnode.name ~= "air" then
-			minetest.chat_send_player(name,"Can't open cabinet - something is in the way")
+			minetest.chat_send_player(name,"Невозможно открыть шкаф - что-то мешает")
 			return
 		end
 		minetest.set_node(frontpos,{name="ltc4000e:door_bottom",param2=node.param2})
@@ -787,7 +787,7 @@ minetest.register_node("ltc4000e:door_top", {
 
 --Make sure lights don't "stall" if unloaded and not yet converted to node timers
 minetest.register_lbm({
-	label = "Restart LTC-4000E timers",
+	label = "Перезапустить счётчики LTC-4000E",
 	name = "ltc4000e:restart_timers",
 	nodenames = {"ltc4000e:polemount","ltc4000e:nema_bottom","ltc4000e:nema_bottom_open"},
 	action = function(pos)
